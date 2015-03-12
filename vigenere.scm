@@ -12,22 +12,20 @@
 (define (int->m i) (integer->char (+ i *first-char*)))
 
 
-(define (vigenere-encrypt key msg)
-  (define (shift m k) (remainder (+ m k) *size*))
+(define (vigenere-proc shift-proc key msg)
   (let loop ((msg (map m->int (string->list msg)))
              (key (apply circular-list (map m->int (string->list key))))
              (res '()))
     (if (null? msg) (list->string (map int->m (reverse res)))
-      (loop (cdr msg) (cdr key) (cons (shift (car msg) (car key)) res)))))
+      (loop (cdr msg) (cdr key) (cons (shift-proc (car msg) (car key)) res)))))
+
+
+(define (vigenere-encrypt key msg)
+  (vigenere-proc (lambda (m k) (remainder (+ m k) *size*)) key msg))
 
 
 (define (vigenere-decrypt key msg)
-  (define (shift m k) (if (>= m k) (- m k) (+ *size* (- m k))))
-  (let loop ((msg (map m->int (string->list msg)))
-             (key (apply circular-list (map m->int (string->list key))))
-             (res '()))
-    (if (null? msg) (list->string (map int->m (reverse res)))
-      (loop (cdr msg) (cdr key) (cons (shift (car msg) (car key)) res)))))
+  (vigenere-proc (lambda (m k) (if (>= m k) (- m k) (+ *size* (- m k)))) key msg))
 
 
 ;; end of file
