@@ -21,4 +21,13 @@
       (loop (cdr msg) (cdr key) (cons (shift (car msg) (car key)) res)))))
 
 
+(define (vigenere-decrypt key msg)
+  (define (shift m k) (if (>= m k) (- m k) (+ *size* (- m k))))
+  (let loop ((msg (map m->int (string->list msg)))
+             (key (apply circular-list (map m->int (string->list key))))
+             (res '()))
+    (if (null? msg) (list->string (map int->m (reverse res)))
+      (loop (cdr msg) (cdr key) (cons (shift (car msg) (car key)) res)))))
+
+
 ;; end of file
