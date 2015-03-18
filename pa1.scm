@@ -1,6 +1,11 @@
 ;;
 
 
+(load "char-freq-tab.scm")
+
+(define (cfreq c) (vector-ref *char-freq-tab* c))
+
+
 (define *encrypted-message* '(
 #xf9 #x6D #xE8 #xC2 #x27 #xA2 #x59 #xC8 #x7E #xE1 #xDA #x2A #xED #x57 #xC9 #x3F
 #xE5 #xDA #x36 #xED #x4E #xC8 #x7E #xF2 #xC6 #x3A #xAE #x5B #x9A #x7E #xFF #xD6
@@ -34,8 +39,30 @@
 #xF0 #xC1 #x3A #xA1 #x47 #x94 ))
 
 
+
+(define *plain-text-chars* (make-vector 256 #f))
+
+(for-each (lambda (c) (vector-set! *plain-text-chars* (char->integer c) #t))
+          (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:!;-"))
+
+(define (good-char? c) (vector-ref *plain-text-chars* c))
+
+
+
+(define (file->plain-text fname)
+  (call-with-input-file 
+    fname
+    (lambda (in)
+      (let loop ((c (read-char in))
+                 (res '()))
+        (if (eof-object? c) (reverse res)
+          (loop (read-char in) (cons c res)))))))
+
+
 (define (vigenere-proc key msg)
-  (let loop ((key (apply circular-list (map char->integer (string->list key))))
+  (let loop ((key (apply circular-list 
+                         (if (list? key) key
+                           (map char->integer (string->list key)))))
              (msg msg)
              (res '()))
     (if (null? msg) (reverse res)
@@ -44,7 +71,11 @@
 
 
 (define (vigenere-encrypt key msg)
-  (vigenere-proc key (map char->integer (string->list msg))))
+  (vigenere-proc 
+    key 
+    (map char->integer 
+         (if (list? msg) msg
+           (string->list msg)))))
 
 
 (define (vigenere-decrypt key msg)
@@ -60,6 +91,78 @@
           ((= i t) (loop (1+ i) (+ t key-len) (cdr msg) (cons (car msg) res)))
           (else    (loop (1+ i) t (cdr msg) res)))))
 
+
+(define (sqr n) (* n n))
+
+
+(define (iterate proc from to init)
+  (let loop ((from from)
+             (res  init))
+    (if (> from to) res
+      (loop (1+ from) (proc from res)))))
+
+
+(define (compute-slice-freq slice)
+  (let ((ftab (make-vector 256 0))
+        (len  (length slice)))
+    (for-each (lambda (c) 
+                (if (< c 256)
+                  (vector-set! ftab c (1+ (vector-ref ftab c))))) slice)
+    (fold
+      (lambda (f res) (+ res (sqr (/ f len))))
+      0
+      (vector->list ftab))))
+
+
+(define (compute-key-freq msg key-len)
+  (iterate
+    (lambda (pos res) (+ res (compute-slice-freq (slice msg key-len pos))))
+    0 (1- key-len)
+    0))
+
+
+(define (bestof s better?)
+  (if (null? s) #f
+    (fold (lambda (x res) (if (better? x res) x res))  (car s) (cdr s))))
+
+
+(define (determine-key-len msg max-key-len)
+  (car 
+    (bestof
+      (map (lambda (k-len) (cons k-len (compute-key-freq msg k-len))) 
+           (iota max-key-len 1))
+      (lambda (a b) (> (cdr a) (cdr b))))))
+
+
+(define (guess-key-pos msg key-len pos)
+
+  (let* ((s    (slice msg key-len pos))
+         (slen (length s)))
+
+    (define (candidat-freq candidat)
+      (let ((ds (map (lambda (e) (logxor e candidat)) s)))
+        (if (not (every good-char? ds)) 0
+          (let ((x (make-vector 256 0)))
+            (for-each (lambda (c) (vector-set! x c (1+ (vector-ref x c)))) ds)
+            (fold
+              (lambda (c res) (+ res (* (sqr (/ (vector-ref x c) slen)) (sqr (cfreq c)))))
+              0
+              ds)))))
+
+    (car
+      (bestof
+        (map (lambda (candidat) (cons candidat (candidat-freq candidat))) (iota 256))
+        (lambda (x y) (> (cdr x) (cdr y)))))))
+
+
+(define (determine-key msg key-len)
+  (map (curry guess-key-pos msg key-len) (iota key-len)))
+
+
+(define (decrypt-pa1)
+  (vigenere-decrypt
+    (determine-key *encrypted-message* (determine-key-len *encrypted-message* 13))
+    *encrypted-message*))
 
 
 ;; end of file
