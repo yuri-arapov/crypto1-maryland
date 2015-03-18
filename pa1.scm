@@ -102,7 +102,7 @@
 (define (sqr n) (* n n))
 
 
-;; iterate over [from to] range on numbers.
+;; iterate over [from to] range of numbers.
 (define (iterate proc from to init)
   (let loop ((from from)
              (res  init))
@@ -175,7 +175,7 @@
 
 
 ;; all the fun in single call.
-(define (decrypt-pa1)
+(define (pa1)
   (vigenere-decrypt
     (determine-key *encrypted-message* (determine-key-len *encrypted-message* 13))
     *encrypted-message*))
