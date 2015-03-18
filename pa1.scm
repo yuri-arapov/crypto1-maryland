@@ -1,6 +1,6 @@
 ;;
 
-
+;; English characters frequencies determined from the books of Gutenberg project.
 (load "char-freq-tab.scm")
 
 (define (cfreq c) (vector-ref *char-freq-tab* c))
@@ -45,10 +45,12 @@
 (for-each (lambda (c) (vector-set! *plain-text-chars* (char->integer c) #t))
           (string->list "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:!;-"))
 
-(define (good-char? c) (vector-ref *plain-text-chars* c))
+
+;; return true if given character belongs to plain text domain.
+(define (plain-text-char? c) (vector-ref *plain-text-chars* c))
 
 
-
+;; read text from the file, return list of characters.
 (define (file->plain-text fname)
   (call-with-input-file 
     fname
@@ -59,6 +61,7 @@
           (loop (read-char in) (cons c res)))))))
 
 
+;; Vigenere's encryption/decription function.
 (define (vigenere-proc key msg)
   (let loop ((key (apply circular-list 
                          (if (list? key) key
@@ -70,6 +73,7 @@
             (cons (logxor (car msg) (car key)) res)))))
 
 
+;; Vigenere's encryption function.
 (define (vigenere-encrypt key msg)
   (vigenere-proc 
     key 
@@ -78,10 +82,13 @@
            (string->list msg)))))
 
 
+;; Vigenere's dencryption function.
 (define (vigenere-decrypt key msg)
   (list->string (map integer->char (vigenere-proc key msg))))
 
 
+;; return list of every key-len-s characters of the message starting
+;; from given index.
 (define (slice msg key-len idx)
   (let loop ((i 0)
              (t idx)
@@ -95,6 +102,7 @@
 (define (sqr n) (* n n))
 
 
+;; iterate over [from to] range on numbers.
 (define (iterate proc from to init)
   (let loop ((from from)
              (res  init))
@@ -102,6 +110,7 @@
       (loop (1+ from) (proc from res)))))
 
 
+;; compute characters' frequencies of given slice.
 (define (compute-slice-freq slice)
   (let ((ftab (make-vector 256 0))
         (len  (length slice)))
@@ -114,6 +123,7 @@
       (vector->list ftab))))
 
 
+;; compute frequencies of characters for given key length.
 (define (compute-key-freq msg key-len)
   (iterate
     (lambda (pos res) (+ res (compute-slice-freq (slice msg key-len pos))))
@@ -121,11 +131,14 @@
     0))
 
 
+;; find best item in the list. the 'better?' is a (proc new old) function
+;; returning true if 'new' is better than 'old'.
 (define (bestof s better?)
   (if (null? s) #f
     (fold (lambda (x res) (if (better? x res) x res))  (car s) (cdr s))))
 
 
+;; determine length of the key.
 (define (determine-key-len msg max-key-len)
   (car 
     (bestof
@@ -134,6 +147,7 @@
       (lambda (a b) (> (cdr a) (cdr b))))))
 
 
+;; guess value of the key in given pos.
 (define (guess-key-pos msg key-len pos)
 
   (let* ((s    (slice msg key-len pos))
@@ -141,7 +155,7 @@
 
     (define (candidat-freq candidat)
       (let ((ds (map (lambda (e) (logxor e candidat)) s)))
-        (if (not (every good-char? ds)) 0
+        (if (not (every plain-text-char? ds)) 0
           (let ((x (make-vector 256 0)))
             (for-each (lambda (c) (vector-set! x c (1+ (vector-ref x c)))) ds)
             (fold
@@ -155,10 +169,12 @@
         (lambda (x y) (> (cdr x) (cdr y)))))))
 
 
+;; do the magic and summon the key.
 (define (determine-key msg key-len)
   (map (curry guess-key-pos msg key-len) (iota key-len)))
 
 
+;; all the fun in single call.
 (define (decrypt-pa1)
   (vigenere-decrypt
     (determine-key *encrypted-message* (determine-key-len *encrypted-message* 13))
